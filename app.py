@@ -18,7 +18,6 @@ from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from openai import OpenAI  # used for OpenRouter-compatible API
 from pydantic import BaseModel
 
 # --- Security constants ---
@@ -106,6 +105,111 @@ def find_video_path(video_id: str) -> Path:
     return candidates[0]
 
 
+def normalize_result(raw: dict[str, Any]) -> dict[str, Any]:
+    status = str(raw.get("status", "NO_FOAM")).strip().upper()
+    if status not in STATUS_ORDER:
+        status = "NO_FOAM"
+
+    try:
+        confidence = float(raw.get("confidence", 0.5))
+    except (TypeError, ValueError):
+        confidence = 0.5
+    confidence = max(0.0, min(1.0, confidence))
+
+    description = str(raw.get("description", "No description provided.")).strip()
+    if not description:
+        description = "No description provided."
+
+    return {
+        "status": status,
+        "confidence": round(confidence, 3),
+        "description": description,
+        "color": STATUS_TO_COLOR[status],
+    }
+
+
+def _parse_json_from_text(text: str) -> Any:
+    """Extract JSON from model response text, handling markdown fences."""
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        if text.startswith("json"):
+            text = text[4:].strip()
+
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # Try to find JSON array or object
+        for start_char, end_char in [("[", "]"), ("{", "}")]:
+            start = text.find(start_char)
+            end = text.rfind(end_char)
+            if start != -1 and end != -1 and end > start:
+                try:
+                    return json.loads(text[start : end + 1])
+                except json.JSONDecodeError:
+                    continue
+        raise ValueError(f"Could not parse JSON from: {text[:200]}")
+
+
+def analyze_video_with_gemini(video_path: Path, api_key: str) -> list[dict[str, Any]]:
+    """Upload video to Google Files API and analyze with Gemini in one call."""
+    import google.generativeai as genai
+
+    genai.configure(api_key=api_key)
+
+    video_file = genai.upload_file(path=str(video_path))
+
+    # Wait for file processing
+    while video_file.state.name == "PROCESSING":
+        time.sleep(2)
+        video_file = genai.get_file(video_file.name)
+
+    if video_file.state.name != "ACTIVE":
+        raise RuntimeError(f"Video upload failed with state: {video_file.state.name}")
+
+    prompt = (
+        "You are analyzing an industrial process video for foam detection. "
+        "Watch the ENTIRE video and produce a timeline analysis, sampling every 2 seconds from the start. "
+        "For each 2-second interval, classify the foam level.\n\n"
+        "Return ONLY a JSON array (no markdown, no explanation) with one entry per 2-second interval:\n"
+        "[\n"
+        '  {"timestamp": "00:00", "timestamp_seconds": 0, "status": "NO_FOAM", "confidence": 0.95, "description": "..."}, \n'
+        '  {"timestamp": "00:02", "timestamp_seconds": 2, "status": "FOAM_STARTING", "confidence": 0.85, "description": "..."}, \n'
+        "  ...\n"
+        "]\n\n"
+        "Status must be one of: NO_FOAM, FOAM_STARTING, MODERATE_FOAM, HEAVY_FOAM\n"
+        "confidence is 0.0-1.0\n"
+        "description should briefly describe what you see at that moment.\n"
+        "Cover the entire video duration."
+    )
+
+    model = genai.GenerativeModel("gemini-2.0-flash")
+    response = model.generate_content([video_file, prompt])
+
+    parsed = _parse_json_from_text(response.text)
+    if not isinstance(parsed, list):
+        raise ValueError("Gemini did not return a JSON array")
+
+    # Clean up uploaded file
+    try:
+        genai.delete_file(video_file.name)
+    except Exception:
+        pass
+
+    results = []
+    for entry in parsed:
+        normalized = normalize_result(entry)
+        results.append({
+            "timestamp_seconds": int(entry.get("timestamp_seconds", 0)),
+            "timestamp": str(entry.get("timestamp", format_time(entry.get("timestamp_seconds", 0)))),
+            **normalized,
+        })
+
+    return results
+
+
+# --- Fallback: frame-by-frame via OpenRouter ---
+
 def extract_frames(video_path: Path, frame_dir: Path, interval_seconds: int = 2) -> list[dict[str, Any]]:
     frame_dir.mkdir(parents=True, exist_ok=True)
     for frame in frame_dir.glob("*.jpg"):
@@ -142,30 +246,9 @@ def extract_frames(video_path: Path, frame_dir: Path, interval_seconds: int = 2)
     return extracted
 
 
-def normalize_result(raw: dict[str, Any]) -> dict[str, Any]:
-    status = str(raw.get("status", "NO_FOAM")).strip().upper()
-    if status not in STATUS_ORDER:
-        status = "NO_FOAM"
+def analyze_frame_with_openrouter(client: Any, frame_path: str) -> dict[str, Any]:
+    from openai import OpenAI
 
-    try:
-        confidence = float(raw.get("confidence", 0.5))
-    except (TypeError, ValueError):
-        confidence = 0.5
-    confidence = max(0.0, min(1.0, confidence))
-
-    description = str(raw.get("description", "No description provided.")).strip()
-    if not description:
-        description = "No description provided."
-
-    return {
-        "status": status,
-        "confidence": round(confidence, 3),
-        "description": description,
-        "color": STATUS_TO_COLOR[status],
-    }
-
-
-def analyze_frame_with_openai(client: OpenAI, frame_path: str) -> dict[str, Any]:
     prompt = (
         "Analyze this frame from an industrial process video. Is there foam visible? "
         "Rate: NO_FOAM, FOAM_STARTING, MODERATE_FOAM, HEAVY_FOAM. "
@@ -189,27 +272,19 @@ def analyze_frame_with_openai(client: OpenAI, frame_path: str) -> dict[str, Any]
     )
 
     text_output = response.choices[0].message.content.strip()
-    if text_output.startswith("```"):
-        text_output = text_output.strip("`")
-        if text_output.startswith("json"):
-            text_output = text_output[4:].strip()
-
     try:
-        parsed = json.loads(text_output)
-    except json.JSONDecodeError:
-        start = text_output.find("{")
-        end = text_output.rfind("}")
-        if start != -1 and end != -1 and end > start:
-            parsed = json.loads(text_output[start : end + 1])
-        else:
-            parsed = {
-                "status": "NO_FOAM",
-                "confidence": 0.4,
-                "description": f"Model returned unstructured output: {text_output[:180]}",
-            }
+        parsed = _parse_json_from_text(text_output)
+    except ValueError:
+        parsed = {
+            "status": "NO_FOAM",
+            "confidence": 0.4,
+            "description": f"Model returned unstructured output: {text_output[:180]}",
+        }
 
     return normalize_result(parsed)
 
+
+# --- Demo mode ---
 
 def generate_demo_analysis(timestamp_seconds: int, max_seconds: int, seed: int) -> dict[str, Any]:
     rng = random.Random(seed + timestamp_seconds)
@@ -251,10 +326,24 @@ def stable_seed_from_video_id(video_id: str) -> int:
     return int.from_bytes(digest[:4], "big")
 
 
+def _get_video_duration(video_path: Path) -> float:
+    """Get video duration in seconds using ffprobe."""
+    cmd = [
+        "ffprobe", "-v", "error", "-show_entries", "format=duration",
+        "-of", "default=noprint_wrappers=1:nokey=1", str(video_path)
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        return 30.0  # fallback default
+    try:
+        return float(proc.stdout.strip())
+    except ValueError:
+        return 30.0
+
+
 def run_analysis(video_id: str, requested_demo_mode: bool) -> None:
     try:
         video_path = find_video_path(video_id)
-        frame_dir = FRAME_DIR / video_id
 
         result_payload = load_result(video_id)
         result_payload["status"] = "analyzing"
@@ -263,30 +352,68 @@ def run_analysis(video_id: str, requested_demo_mode: bool) -> None:
         result_payload["error"] = None
         save_result(video_id, result_payload)
 
-        frame_entries = extract_frames(video_path, frame_dir)
-
+        google_key = os.getenv("GOOGLE_API_KEY")
         openrouter_key = os.getenv("OPENROUTER_API_KEY")
-        use_demo = requested_demo_mode or not openrouter_key
+        use_demo = requested_demo_mode or (not google_key and not openrouter_key)
+        use_native_gemini = bool(google_key) and not use_demo
+
         result_payload["demo_mode"] = use_demo
         save_result(video_id, result_payload)
 
-        client = OpenAI(
-            api_key=openrouter_key,
-            base_url="https://openrouter.ai/api/v1",
-        ) if not use_demo else None
-        max_seconds = frame_entries[-1]["timestamp_seconds"] if frame_entries else 0
-        seed = stable_seed_from_video_id(video_id)
+        if use_demo:
+            # Demo mode: generate fake timeline
+            duration = _get_video_duration(video_path)
+            max_seconds = int(duration)
+            seed = stable_seed_from_video_id(video_id)
+            analyzed: list[dict[str, Any]] = []
+            timestamps = list(range(0, max_seconds + 1, 2))
+            if not timestamps:
+                timestamps = [0]
+            total = len(timestamps)
 
-        analyzed: list[dict[str, Any]] = []
-        total = len(frame_entries)
+            for i, ts in enumerate(timestamps, start=1):
+                model_result = generate_demo_analysis(ts, max_seconds, seed)
+                row = {
+                    "timestamp_seconds": ts,
+                    "timestamp": format_time(ts),
+                    **model_result,
+                }
+                analyzed.append(row)
 
-        for i, frame in enumerate(frame_entries, start=1):
-            if use_demo:
-                model_result = generate_demo_analysis(frame["timestamp_seconds"], max_seconds, seed)
-            else:
+                result_payload["status"] = "analyzing"
+                result_payload["progress"] = int((i / total) * 100)
+                result_payload["results"] = analyzed
+                save_result(video_id, result_payload)
+
+        elif use_native_gemini:
+            # Native Gemini video analysis: one API call, no frame extraction
+            result_payload["progress"] = 10
+            save_result(video_id, result_payload)
+
+            analyzed = analyze_video_with_gemini(video_path, google_key)
+
+            result_payload["progress"] = 95
+            result_payload["results"] = analyzed
+            save_result(video_id, result_payload)
+
+        else:
+            # Fallback: frame-by-frame via OpenRouter
+            from openai import OpenAI
+
+            frame_dir = FRAME_DIR / video_id
+            frame_entries = extract_frames(video_path, frame_dir)
+
+            client = OpenAI(
+                api_key=openrouter_key,
+                base_url="https://openrouter.ai/api/v1",
+            )
+            analyzed = []
+            total = len(frame_entries)
+
+            for i, frame in enumerate(frame_entries, start=1):
                 try:
-                    model_result = analyze_frame_with_openai(client, frame["frame_path"])
-                except Exception as exc:  # noqa: BLE001
+                    model_result = analyze_frame_with_openrouter(client, frame["frame_path"])
+                except Exception as exc:
                     model_result = normalize_result(
                         {
                             "status": "NO_FOAM",
@@ -295,18 +422,17 @@ def run_analysis(video_id: str, requested_demo_mode: bool) -> None:
                         }
                     )
 
-            row = {
-                "timestamp_seconds": frame["timestamp_seconds"],
-                "timestamp": frame["timestamp"],
-                **model_result,
-            }
-            analyzed.append(row)
+                row = {
+                    "timestamp_seconds": frame["timestamp_seconds"],
+                    "timestamp": frame["timestamp"],
+                    **model_result,
+                }
+                analyzed.append(row)
 
-            progress = int((i / total) * 100)
-            result_payload["status"] = "analyzing"
-            result_payload["progress"] = progress
-            result_payload["results"] = analyzed
-            save_result(video_id, result_payload)
+                result_payload["status"] = "analyzing"
+                result_payload["progress"] = int((i / total) * 100)
+                result_payload["results"] = analyzed
+                save_result(video_id, result_payload)
 
         result_payload["status"] = "completed"
         result_payload["progress"] = 100
