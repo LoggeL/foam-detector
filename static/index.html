@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>BASF Foam Detector Demo</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+    :root {
+      --bg: #0b0f14;
+      --bg-soft: #111822;
+      --bg-card: #151f2c;
+      --text: #edf3ff;
+      --muted: #9eb1c6;
+      --line: #25364b;
+      --accent: #00b6c9;
+      --green: #25c06d;
+      --yellow: #f0bf3d;
+      --red: #ef4e3c;
+      --shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      font-family: 'Space Grotesk', sans-serif;
+      background:
+        radial-gradient(1200px 520px at 10% -5%, rgba(0, 182, 201, 0.14), transparent 70%),
+        radial-gradient(800px 420px at 95% 8%, rgba(240, 191, 61, 0.08), transparent 68%),
+        linear-gradient(160deg, #090d12 0%, #0d1219 60%, #0a0f15 100%);
+    }
+
+    .grid-overlay {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.15;
+      background-image:
+        linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+      background-size: 42px 42px;
+      mask-image: radial-gradient(circle at 40% 25%, #000 30%, transparent 85%);
+    }
+
+    .app {
+      width: min(1120px, 94vw);
+      margin: 24px auto 42px;
+      display: grid;
+      gap: 16px;
+      animation: rise 520ms ease forwards;
+    }
+
+    @keyframes rise {
+      from { transform: translateY(12px); opacity: 0; }
+      to { transform: translateY(0); opacity: 1; }
+    }
+
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      backdrop-filter: blur(8px);
+    }
+
+    .header {
+      padding: 22px 24px;
+      display: flex;
+      justify-content: space-between;
+      gap: 14px;
+      align-items: center;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.2rem, 2vw, 1.78rem);
+      letter-spacing: 0.02em;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 0.95rem;
+    }
+
+    .demo-toggle {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 0.92rem;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .demo-toggle input {
+      width: 18px;
+      height: 18px;
+      accent-color: var(--accent);
+    }
+
+    .upload {
+      padding: 22px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .dropzone {
+      border: 1.5px dashed #3d536d;
+      border-radius: 14px;
+      min-height: 130px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: var(--muted);
+      padding: 20px;
+      transition: border-color 180ms ease, background 180ms ease, transform 180ms ease;
+      cursor: pointer;
+    }
+
+    .dropzone.active {
+      border-color: var(--accent);
+      background: rgba(0, 182, 201, 0.11);
+      transform: scale(0.997);
+    }
+
+    .actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+
+    button {
+      border: 0;
+      border-radius: 11px;
+      padding: 10px 14px;
+      font-family: inherit;
+      font-weight: 600;
+      cursor: pointer;
+      transition: transform 120ms ease, filter 120ms ease, opacity 120ms ease;
+    }
+
+    button:disabled {
+      opacity: 0.45;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    button:not(:disabled):hover {
+      transform: translateY(-1px);
+      filter: brightness(1.08);
+    }
+
+    .btn-primary {
+      background: linear-gradient(90deg, #00a4b6, #0dc7d8);
+      color: #021218;
+    }
+
+    .btn-secondary {
+      background: #1d2c3d;
+      color: #dce8f6;
+    }
+
+    .video-panel {
+      padding: 18px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .video-wrap {
+      background: #0a1017;
+      border-radius: 14px;
+      border: 1px solid #27384d;
+      overflow: hidden;
+    }
+
+    video {
+      width: 100%;
+      max-height: 560px;
+      display: block;
+      background: #000;
+    }
+
+    .timeline-wrap {
+      position: relative;
+      background: #101923;
+      border: 1px solid #294057;
+      border-radius: 999px;
+      height: 22px;
+      overflow: hidden;
+      cursor: pointer;
+      display: none;
+    }
+
+    .timeline-segment {
+      height: 100%;
+      display: inline-block;
+      transition: filter 120ms ease;
+    }
+
+    .timeline-segment.green { background: var(--green); }
+    .timeline-segment.yellow { background: var(--yellow); }
+    .timeline-segment.red { background: var(--red); }
+
+    .timeline-wrap:hover .timeline-segment { filter: saturate(1.08); }
+
+    .timeline-marker {
+      position: absolute;
+      top: 0;
+      width: 2px;
+      height: 100%;
+      background: #e8f1ff;
+      box-shadow: 0 0 0 2px rgba(11, 16, 24, 0.35);
+      pointer-events: none;
+      transform: translateX(-1px);
+    }
+
+    .meta {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: center;
+      font-size: 0.92rem;
+      color: var(--muted);
+    }
+
+    .chip {
+      border: 1px solid #38516b;
+      border-radius: 999px;
+      padding: 4px 10px;
+      font-size: 0.88rem;
+      color: #d8e6f6;
+      background: rgba(34, 49, 66, 0.7);
+    }
+
+    .chip.green { border-color: rgba(37, 192, 109, 0.45); color: #b5f6cf; }
+    .chip.yellow { border-color: rgba(240, 191, 61, 0.45); color: #f7df9a; }
+    .chip.red { border-color: rgba(239, 78, 60, 0.45); color: #ffc1b8; }
+
+    .progress {
+      display: none;
+      align-items: center;
+      gap: 12px;
+      padding: 12px 16px;
+      margin: 0 22px 18px;
+      border: 1px solid #29435a;
+      border-radius: 12px;
+      background: rgba(11, 25, 34, 0.8);
+      color: #bdd0e8;
+      font-size: 0.92rem;
+    }
+
+    .spinner {
+      width: 17px;
+      height: 17px;
+      border: 2px solid rgba(207, 227, 251, 0.2);
+      border-top-color: #d8e8ff;
+      border-radius: 50%;
+      animation: spin 0.9s linear infinite;
+      flex-shrink: 0;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    .bar {
+      flex: 1;
+      height: 7px;
+      border-radius: 999px;
+      background: #25374b;
+      overflow: hidden;
+    }
+
+    .bar > span {
+      display: block;
+      width: 0%;
+      height: 100%;
+      background: linear-gradient(90deg, #0ea8ba, #4fd2e0);
+      transition: width 180ms linear;
+    }
+
+    .table-card {
+      padding: 16px;
+      overflow: hidden;
+    }
+
+    .table-wrap {
+      max-height: 340px;
+      overflow: auto;
+      border: 1px solid #26384c;
+      border-radius: 12px;
+    }
+
+    table {
+      border-collapse: collapse;
+      width: 100%;
+      min-width: 680px;
+      font-size: 0.93rem;
+    }
+
+    th, td {
+      border-bottom: 1px solid #24384d;
+      text-align: left;
+      padding: 11px 12px;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: #132033;
+      color: #d8e5f6;
+      font-weight: 600;
+      z-index: 1;
+    }
+
+    td.mono {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.86rem;
+    }
+
+    .empty {
+      color: #95aac4;
+      padding: 18px;
+      text-align: center;
+    }
+
+    @media (max-width: 760px) {
+      .header { flex-direction: column; align-items: flex-start; }
+      .meta { grid-template-columns: 1fr; }
+      .actions { width: 100%; }
+      button { width: 100%; }
+    }
+  </style>
+</head>
+<body>
+  <div class="grid-overlay"></div>
+  <main class="app">
+    <section class="header card">
+      <div>
+        <h1>Foam Detection Dashboard</h1>
+        <p class="subtitle">Video-based foam classification using GPT-4o Vision for BASF demo.</p>
+      </div>
+      <label class="demo-toggle">
+        <input type="checkbox" id="demoMode" checked />
+        Demo Mode (no API key needed)
+      </label>
+    </section>
+
+    <section class="upload card">
+      <div id="dropzone" class="dropzone">
+        <div>
+          <strong>Drop video here</strong>
+          <div style="margin-top: 6px; font-size: 0.92rem;">or click to choose an MP4/MOV file</div>
+        </div>
+      </div>
+      <input id="fileInput" type="file" accept="video/*" hidden />
+      <div class="actions">
+        <button id="pickBtn" class="btn-secondary">Pick Video File</button>
+        <button id="sampleBtn" class="btn-secondary">Use Bundled Sample</button>
+        <button id="analyzeBtn" class="btn-primary" disabled>Analyze</button>
+      </div>
+      <div id="uploadInfo" class="subtitle">No video uploaded yet.</div>
+    </section>
+
+    <section class="video-panel card">
+      <div class="video-wrap">
+        <video id="video" controls preload="metadata"></video>
+      </div>
+      <div id="timelineWrap" class="timeline-wrap" title="Click to seek"></div>
+      <div class="meta">
+        <div id="timelineHint">Upload and analyze a video to see foam timeline.</div>
+        <div id="currentStatus" class="chip">Status: --</div>
+      </div>
+    </section>
+
+    <section id="progressBox" class="progress">
+      <div class="spinner"></div>
+      <div id="progressText">Preparing analysis...</div>
+      <div class="bar"><span id="progressFill"></span></div>
+      <div id="progressPct" class="mono">0%</div>
+    </section>
+
+    <section class="table-card card">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Timestamp</th>
+              <th>Status</th>
+              <th>Confidence</th>
+              <th>Description</th>
+            </tr>
+          </thead>
+          <tbody id="resultTableBody">
+            <tr><td colspan="4" class="empty">No analysis results yet.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    const el = {
+      dropzone: document.getElementById('dropzone'),
+      fileInput: document.getElementById('fileInput'),
+      pickBtn: document.getElementById('pickBtn'),
+      sampleBtn: document.getElementById('sampleBtn'),
+      analyzeBtn: document.getElementById('analyzeBtn'),
+      uploadInfo: document.getElementById('uploadInfo'),
+      video: document.getElementById('video'),
+      timelineWrap: document.getElementById('timelineWrap'),
+      timelineHint: document.getElementById('timelineHint'),
+      currentStatus: document.getElementById('currentStatus'),
+      resultTableBody: document.getElementById('resultTableBody'),
+      progressBox: document.getElementById('progressBox'),
+      progressText: document.getElementById('progressText'),
+      progressFill: document.getElementById('progressFill'),
+      progressPct: document.getElementById('progressPct'),
+      demoMode: document.getElementById('demoMode'),
+    };
+
+    const statusColors = {
+      NO_FOAM: 'green',
+      FOAM_STARTING: 'yellow',
+      MODERATE_FOAM: 'red',
+      HEAVY_FOAM: 'red',
+    };
+
+    let currentVideoId = null;
+    let currentResults = [];
+    let pollTimer = null;
+
+    function setProgress(visible, text = '', pct = 0) {
+      el.progressBox.style.display = visible ? 'flex' : 'none';
+      if (!visible) return;
+      el.progressText.textContent = text;
+      const val = Math.max(0, Math.min(100, Number(pct || 0)));
+      el.progressFill.style.width = `${val}%`;
+      el.progressPct.textContent = `${val}%`;
+    }
+
+    function setStatusChip(row) {
+      if (!row) {
+        el.currentStatus.className = 'chip';
+        el.currentStatus.textContent = 'Status: --';
+        return;
+      }
+      const color = statusColors[row.status] || 'green';
+      el.currentStatus.className = `chip ${color}`;
+      el.currentStatus.textContent = `${row.timestamp} | ${row.status} | ${(row.confidence * 100).toFixed(1)}%`;
+    }
+
+    function renderTable(results) {
+      if (!results.length) {
+        el.resultTableBody.innerHTML = '<tr><td colspan="4" class="empty">No analysis results yet.</td></tr>';
+        return;
+      }
+
+      el.resultTableBody.innerHTML = results.map((r) => `
+        <tr>
+          <td class="mono">${r.timestamp}</td>
+          <td>${r.status}</td>
+          <td>${(Number(r.confidence) * 100).toFixed(1)}%</td>
+          <td>${r.description}</td>
+        </tr>
+      `).join('');
+    }
+
+    function renderTimeline(results) {
+      currentResults = results || [];
+      el.timelineWrap.innerHTML = '';
+
+      if (!currentResults.length) {
+        el.timelineWrap.style.display = 'none';
+        el.timelineHint.textContent = 'Upload and analyze a video to see foam timeline.';
+        setStatusChip(null);
+        return;
+      }
+
+      const duration = Number(el.video.duration) || (currentResults[currentResults.length - 1].timestamp_seconds + 2);
+      for (let i = 0; i < currentResults.length; i += 1) {
+        const cur = currentResults[i];
+        const next = currentResults[i + 1];
+        const start = cur.timestamp_seconds;
+        const end = next ? next.timestamp_seconds : duration;
+        const widthPct = Math.max(0.8, ((end - start) / duration) * 100);
+
+        const seg = document.createElement('span');
+        seg.className = `timeline-segment ${statusColors[cur.status] || 'green'}`;
+        seg.style.width = `${widthPct}%`;
+        seg.title = `${cur.timestamp} - ${cur.status}`;
+        el.timelineWrap.appendChild(seg);
+      }
+
+      const marker = document.createElement('span');
+      marker.className = 'timeline-marker';
+      marker.id = 'timelineMarker';
+      el.timelineWrap.appendChild(marker);
+
+      el.timelineWrap.style.display = 'block';
+      el.timelineHint.textContent = 'Timeline colors: green=no foam, yellow=starting, red=moderate/heavy. Click to seek.';
+      updateStatusForTime(el.video.currentTime || 0);
+      updateTimelineMarker();
+    }
+
+    function nearestResultByTime(seconds) {
+      if (!currentResults.length) return null;
+      let best = currentResults[0];
+      let bestDiff = Math.abs(seconds - best.timestamp_seconds);
+      for (let i = 1; i < currentResults.length; i += 1) {
+        const d = Math.abs(seconds - currentResults[i].timestamp_seconds);
+        if (d < bestDiff) {
+          best = currentResults[i];
+          bestDiff = d;
+        }
+      }
+      return best;
+    }
+
+    function updateStatusForTime(seconds) {
+      const row = nearestResultByTime(seconds);
+      setStatusChip(row);
+    }
+
+    function updateTimelineMarker() {
+      const marker = document.getElementById('timelineMarker');
+      if (!marker || !el.video.duration) return;
+      const ratio = Math.max(0, Math.min(1, el.video.currentTime / el.video.duration));
+      marker.style.left = `${ratio * 100}%`;
+    }
+
+    async function uploadVideo(file) {
+      const form = new FormData();
+      form.append('file', file);
+
+      setProgress(true, 'Uploading video...', 5);
+      const res = await fetch('/upload', { method: 'POST', body: form });
+      if (!res.ok) throw new Error(`Upload failed (${res.status})`);
+      const data = await res.json();
+
+      currentVideoId = data.video_id;
+      el.video.src = data.video_url;
+      el.video.load();
+      el.uploadInfo.textContent = `Uploaded: ${data.filename} | Video ID: ${data.video_id}`;
+      el.analyzeBtn.disabled = false;
+      renderTable([]);
+      renderTimeline([]);
+      setProgress(false);
+    }
+
+    async function startAnalysis() {
+      if (!currentVideoId) return;
+
+      setProgress(true, 'Starting analysis...', 3);
+      const res = await fetch('/analyze', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          video_id: currentVideoId,
+          demo_mode: el.demoMode.checked,
+        }),
+      });
+
+      if (!res.ok) {
+        const msg = await res.text();
+        throw new Error(msg || 'Failed to trigger analysis');
+      }
+
+      await pollResults();
+    }
+
+    async function pollResults() {
+      if (!currentVideoId) return;
+      if (pollTimer) clearInterval(pollTimer);
+
+      const tick = async () => {
+        const res = await fetch(`/results/${currentVideoId}`);
+        if (!res.ok) return;
+        const data = await res.json();
+
+        const pct = Number(data.progress || 0);
+        if (data.status === 'analyzing') {
+          setProgress(true, 'Analyzing frames with vision model...', pct);
+        }
+
+        if (Array.isArray(data.results)) {
+          renderTable(data.results);
+          renderTimeline(data.results);
+        }
+
+        if (data.status === 'completed') {
+          setProgress(false);
+          clearInterval(pollTimer);
+          pollTimer = null;
+          el.uploadInfo.textContent = `Analysis complete for ${currentVideoId}${data.demo_mode ? ' (Demo Mode)' : ''}`;
+        }
+
+        if (data.status === 'failed') {
+          setProgress(false);
+          clearInterval(pollTimer);
+          pollTimer = null;
+          alert(`Analysis failed: ${data.error || 'Unknown error'}`);
+        }
+      };
+
+      await tick();
+      pollTimer = setInterval(tick, 1000);
+    }
+
+    function attachDragDrop() {
+      ['dragenter', 'dragover'].forEach((evt) => {
+        el.dropzone.addEventListener(evt, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          el.dropzone.classList.add('active');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach((evt) => {
+        el.dropzone.addEventListener(evt, (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          el.dropzone.classList.remove('active');
+        });
+      });
+
+      el.dropzone.addEventListener('drop', async (e) => {
+        const [file] = e.dataTransfer.files || [];
+        if (!file) return;
+        try {
+          await uploadVideo(file);
+        } catch (err) {
+          setProgress(false);
+          alert(err.message);
+        }
+      });
+
+      el.dropzone.addEventListener('click', () => el.fileInput.click());
+    }
+
+    async function uploadBundledSample() {
+      setProgress(true, 'Loading bundled sample...', 2);
+      const res = await fetch('/static/sample_foam_video.mp4');
+      if (!res.ok) {
+        throw new Error('Bundled sample is not available. Please upload your own video.');
+      }
+
+      const blob = await res.blob();
+      const file = new File([blob], 'sample_foam_video.mp4', { type: blob.type || 'video/mp4' });
+      await uploadVideo(file);
+    }
+
+    el.fileInput.addEventListener('change', async (e) => {
+      const [file] = e.target.files || [];
+      if (!file) return;
+      try {
+        await uploadVideo(file);
+      } catch (err) {
+        setProgress(false);
+        alert(err.message);
+      }
+      e.target.value = '';
+    });
+
+    el.pickBtn.addEventListener('click', () => el.fileInput.click());
+
+    el.sampleBtn.addEventListener('click', async () => {
+      try {
+        await uploadBundledSample();
+      } catch (err) {
+        setProgress(false);
+        alert(err.message);
+      }
+    });
+
+    el.analyzeBtn.addEventListener('click', async () => {
+      try {
+        await startAnalysis();
+      } catch (err) {
+        setProgress(false);
+        alert(err.message);
+      }
+    });
+
+    el.video.addEventListener('timeupdate', () => {
+      updateStatusForTime(el.video.currentTime || 0);
+      updateTimelineMarker();
+    });
+
+    el.timelineWrap.addEventListener('click', (e) => {
+      if (!el.video.duration) return;
+      const rect = el.timelineWrap.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      el.video.currentTime = ratio * el.video.duration;
+      updateStatusForTime(el.video.currentTime);
+      updateTimelineMarker();
+    });
+
+    attachDragDrop();
+  </script>
+</body>
+</html>
