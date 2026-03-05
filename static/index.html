@@ -337,6 +337,10 @@
       .actions { width: 100%; }
       button { width: 100%; }
     }
+    @keyframes livepulse {
+      0%,100% { opacity:1; transform:scale(1); }
+      50% { opacity:0.3; transform:scale(1.4); }
+    }
   </style>
 </head>
 <body>
@@ -370,8 +374,17 @@
     </section>
 
     <section class="video-panel card">
-      <div class="video-wrap">
+      <div class="video-wrap" style="position:relative;">
         <video id="video" controls preload="metadata"></video>
+        <div id="liveOverlay" style="display:none;position:absolute;top:12px;left:12px;right:12px;background:rgba(0,0,0,0.72);border-radius:10px;padding:10px 14px;color:#fff;font-family:monospace;backdrop-filter:blur(4px);border:1px solid rgba(255,255,255,0.1);pointer-events:none;">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+            <span style="width:10px;height:10px;border-radius:50%;background:#ef4444;display:inline-block;animation:livepulse 1s infinite;"></span>
+            <span style="font-size:11px;font-weight:700;letter-spacing:1px;color:#ef4444;">LIVE</span>
+            <span id="liveStatus" style="margin-left:auto;font-size:13px;font-weight:700;padding:2px 10px;border-radius:20px;background:#22c55e;">NO FOAM</span>
+          </div>
+          <div style="font-size:11px;color:#aaa;" id="liveConf">Confidence: --</div>
+          <div style="font-size:11px;color:#ccc;margin-top:3px;line-height:1.4;" id="liveDesc">Waiting for first frame…</div>
+        </div>
       </div>
       <div id="timelineWrap" class="timeline-wrap" title="Click to seek"></div>
       <div class="meta">
@@ -704,6 +717,62 @@
     });
 
     attachDragDrop();
+
+    // --- LIVE ANALYSIS ---
+    let liveInterval = null;
+    const liveCanvas = document.createElement('canvas');
+    const liveCtx = liveCanvas.getContext('2d');
+    const liveOverlay = document.getElementById('liveOverlay');
+    const liveStatus = document.getElementById('liveStatus');
+    const liveConf = document.getElementById('liveConf');
+    const liveDesc = document.getElementById('liveDesc');
+
+    const STATUS_COLORS = {
+      'NO_FOAM': '#22c55e',
+      'FOAM_STARTING': '#eab308',
+      'MODERATE_FOAM': '#f97316',
+      'HEAVY_FOAM': '#ef4444',
+    };
+
+    async function captureLiveFrame() {
+      if (el.video.paused || el.video.ended || !el.video.readyState) return;
+      liveCanvas.width = el.video.videoWidth || 640;
+      liveCanvas.height = el.video.videoHeight || 360;
+      liveCtx.drawImage(el.video, 0, 0, liveCanvas.width, liveCanvas.height);
+      const dataUrl = liveCanvas.toDataURL('image/jpeg', 0.7);
+      const base64 = dataUrl.split(',')[1];
+      try {
+        const res = await fetch('/analyze-frame', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: base64 }),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const color = STATUS_COLORS[data.status] || '#22c55e';
+        liveStatus.textContent = data.status.replace(/_/g, ' ');
+        liveStatus.style.background = color;
+        liveConf.textContent = `Confidence: ${Math.round((data.confidence || 0) * 100)}%`;
+        liveDesc.textContent = data.description || '';
+      } catch (e) { /* ignore */ }
+    }
+
+    function startLive() {
+      if (liveInterval) return;
+      liveOverlay.style.display = 'block';
+      captureLiveFrame();
+      liveInterval = setInterval(captureLiveFrame, 2000);
+    }
+
+    function stopLive() {
+      if (liveInterval) { clearInterval(liveInterval); liveInterval = null; }
+      liveOverlay.style.display = 'none';
+    }
+
+    el.video.addEventListener('play', startLive);
+    el.video.addEventListener('pause', stopLive);
+    el.video.addEventListener('ended', stopLive);
+
   </script>
 </body>
 </html>

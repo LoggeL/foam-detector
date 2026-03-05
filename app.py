@@ -546,3 +546,45 @@ def get_video(video_id: str, request: Request) -> FileResponse:
     _validate_video_id(video_id)
     video_path = find_video_path(video_id)
     return FileResponse(video_path)
+
+
+class LiveFrameRequest(BaseModel):
+    image: str  # base64 JPEG
+
+
+@app.post("/analyze-frame")
+def analyze_live_frame(request: Request, req: LiveFrameRequest) -> dict[str, Any]:
+    _rate_limit(request)
+    openrouter_key = os.getenv("OPENROUTER_API_KEY")
+    if not openrouter_key:
+        # Demo fallback
+        import random as _random
+        statuses = ["NO_FOAM", "FOAM_STARTING", "MODERATE_FOAM", "HEAVY_FOAM"]
+        status = _random.choice(statuses)
+        return {
+            "status": status,
+            "confidence": round(_random.uniform(0.6, 0.95), 2),
+            "description": f"Demo mode: {status.replace('_', ' ').lower()} detected.",
+            "color": STATUS_TO_COLOR[status],
+        }
+
+    # Save frame to temp file
+    tmp_path = f"/tmp/live_frame_{uuid.uuid4().hex}.jpg"
+    try:
+        image_bytes = base64.b64decode(req.image)
+        Path(tmp_path).write_bytes(image_bytes)
+        client = OpenAI(
+            api_key=openrouter_key,
+            base_url="https://openrouter.ai/api/v1",
+        )
+        result = analyze_frame_with_openrouter(client, tmp_path)
+        return result
+    except Exception as exc:
+        return {
+            "status": "NO_FOAM",
+            "confidence": 0.2,
+            "description": f"Analysis error: {exc}",
+            "color": STATUS_TO_COLOR["NO_FOAM"],
+        }
+    finally:
+        Path(tmp_path).unlink(missing_ok=True)
