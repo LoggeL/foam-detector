@@ -18,7 +18,7 @@ from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
-from openai import OpenAI
+from openai import OpenAI  # used for OpenRouter-compatible API
 from pydantic import BaseModel
 
 # --- Security constants ---
@@ -175,20 +175,20 @@ def analyze_frame_with_openai(client: OpenAI, frame_path: str) -> dict[str, Any]
     image_bytes = Path(frame_path).read_bytes()
     image_b64 = base64.b64encode(image_bytes).decode("utf-8")
 
-    response = client.responses.create(
-        model="gpt-4o",
-        input=[
+    response = client.chat.completions.create(
+        model="google/gemini-3-flash-preview",
+        messages=[
             {
                 "role": "user",
                 "content": [
-                    {"type": "input_text", "text": prompt},
-                    {"type": "input_image", "image_url": f"data:image/jpeg;base64,{image_b64}"},
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": f"data:image/jpeg;base64,{image_b64}"}},
                 ],
             }
         ],
     )
 
-    text_output = response.output_text.strip()
+    text_output = response.choices[0].message.content.strip()
     if text_output.startswith("```"):
         text_output = text_output.strip("`")
         if text_output.startswith("json"):
@@ -265,11 +265,15 @@ def run_analysis(video_id: str, requested_demo_mode: bool) -> None:
 
         frame_entries = extract_frames(video_path, frame_dir)
 
-        use_demo = requested_demo_mode or not os.getenv("OPENAI_API_KEY")
+        openrouter_key = os.getenv("OPENROUTER_API_KEY")
+        use_demo = requested_demo_mode or not openrouter_key
         result_payload["demo_mode"] = use_demo
         save_result(video_id, result_payload)
 
-        client = OpenAI() if not use_demo else None
+        client = OpenAI(
+            api_key=openrouter_key,
+            base_url="https://openrouter.ai/api/v1",
+        ) if not use_demo else None
         max_seconds = frame_entries[-1]["timestamp_seconds"] if frame_entries else 0
         seed = stable_seed_from_video_id(video_id)
 
