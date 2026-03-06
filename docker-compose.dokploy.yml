@@ -1,0 +1,18 @@
+services:
+  foam-detector:
+    build:
+      context: .
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+    volumes:
+      - foam_data:/app/data
+    restart: unless-stopped
+    networks:
+      - dokploy-network
+
+networks:
+  dokploy-network:
+    external: true
+
+volumes:
+  foam_data:

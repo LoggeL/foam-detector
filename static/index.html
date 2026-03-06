@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>BASF Foam Detector Demo</title>
+  <title>BASF Vision Detection Demo</title>
   <style>
     @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
 
@@ -17,13 +17,12 @@
       --accent: #00b6c9;
       --green: #25c06d;
       --yellow: #f0bf3d;
+      --orange: #f97316;
       --red: #ef4e3c;
       --shadow: 0 12px 40px rgba(0, 0, 0, 0.35);
     }
 
-    * {
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; }
 
     body {
       margin: 0;
@@ -42,8 +41,8 @@
       pointer-events: none;
       opacity: 0.15;
       background-image:
-        linear-gradient(to right, rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-        linear-gradient(to bottom, rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+        linear-gradient(to right, rgba(255,255,255,0.04) 1px, transparent 1px),
+        linear-gradient(to bottom, rgba(255,255,255,0.03) 1px, transparent 1px);
       background-size: 42px 42px;
       mask-image: radial-gradient(circle at 40% 25%, #000 30%, transparent 85%);
     }
@@ -75,6 +74,7 @@
       justify-content: space-between;
       gap: 14px;
       align-items: center;
+      flex-wrap: wrap;
     }
 
     h1 {
@@ -88,6 +88,51 @@
       margin: 5px 0 0;
       color: var(--muted);
       font-size: 0.95rem;
+    }
+
+    .header-controls {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    /* Mode toggle tabs */
+    .mode-tabs {
+      display: flex;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+    }
+
+    .mode-tab {
+      padding: 8px 18px;
+      font-family: inherit;
+      font-size: 0.9rem;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      background: transparent;
+      color: var(--muted);
+      transition: background 180ms ease, color 180ms ease;
+    }
+
+    .mode-tab:hover {
+      background: rgba(255,255,255,0.05);
+      color: var(--text);
+      transform: none;
+      filter: none;
+    }
+
+    .mode-tab.active-foam {
+      background: linear-gradient(90deg, rgba(0,182,201,0.22), rgba(0,182,201,0.12));
+      color: #7ee8f4;
+      border-right: 1px solid var(--line);
+    }
+
+    .mode-tab.active-leak {
+      background: linear-gradient(90deg, rgba(249,115,22,0.22), rgba(249,115,22,0.12));
+      color: #fdba74;
     }
 
     .demo-toggle {
@@ -162,6 +207,11 @@
       color: #021218;
     }
 
+    .btn-primary-leak {
+      background: linear-gradient(90deg, #c2410c, #f97316);
+      color: #fff;
+    }
+
     .btn-secondary {
       background: #1d2c3d;
       color: #dce8f6;
@@ -204,9 +254,10 @@
       transition: filter 120ms ease;
     }
 
-    .timeline-segment.green { background: var(--green); }
+    .timeline-segment.green  { background: var(--green); }
     .timeline-segment.yellow { background: var(--yellow); }
-    .timeline-segment.red { background: var(--red); }
+    .timeline-segment.orange { background: var(--orange); }
+    .timeline-segment.red    { background: var(--red); }
 
     .timeline-wrap:hover .timeline-segment { filter: saturate(1.08); }
 
@@ -239,9 +290,10 @@
       background: rgba(34, 49, 66, 0.7);
     }
 
-    .chip.green { border-color: rgba(37, 192, 109, 0.45); color: #b5f6cf; }
+    .chip.green  { border-color: rgba(37, 192, 109, 0.45); color: #b5f6cf; }
     .chip.yellow { border-color: rgba(240, 191, 61, 0.45); color: #f7df9a; }
-    .chip.red { border-color: rgba(239, 78, 60, 0.45); color: #ffc1b8; }
+    .chip.orange { border-color: rgba(249, 115, 22, 0.45); color: #fdba74; }
+    .chip.red    { border-color: rgba(239, 78, 60, 0.45);  color: #ffc1b8; }
 
     .progress {
       display: none;
@@ -266,9 +318,7 @@
       flex-shrink: 0;
     }
 
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
+    @keyframes spin { to { transform: rotate(360deg); } }
 
     .bar {
       flex: 1;
@@ -331,12 +381,28 @@
       text-align: center;
     }
 
+    /* Mode badge */
+    .mode-badge {
+      display: inline-block;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 2px 8px;
+      border-radius: 6px;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+    .mode-badge.foam { background: rgba(0,182,201,0.2); color: #7ee8f4; border: 1px solid rgba(0,182,201,0.3); }
+    .mode-badge.leak { background: rgba(249,115,22,0.2); color: #fdba74; border: 1px solid rgba(249,115,22,0.3); }
+
     @media (max-width: 760px) {
       .header { flex-direction: column; align-items: flex-start; }
       .meta { grid-template-columns: 1fr; }
       .actions { width: 100%; }
       button { width: 100%; }
     }
+
     @keyframes livepulse {
       0%,100% { opacity:1; transform:scale(1); }
       50% { opacity:0.3; transform:scale(1.4); }
@@ -348,13 +414,20 @@
   <main class="app">
     <section class="header card">
       <div>
-        <h1>Foam Detection Dashboard</h1>
-        <p class="subtitle">Video-based foam classification using GPT-4o Vision for BASF demo.</p>
+        <h1>BASF Vision Detection <span id="modeBadge" class="mode-badge foam">Foam</span></h1>
+        <p class="subtitle">Video-based industrial anomaly detection — foam &amp; leakage analysis.</p>
       </div>
-      <label class="demo-toggle">
-        <input type="checkbox" id="demoMode" checked />
-        Demo Mode (no API key needed)
-      </label>
+      <div class="header-controls">
+        <!-- Detection mode tabs -->
+        <div class="mode-tabs">
+          <button class="mode-tab active-foam" id="tabFoam" onclick="setDetectionMode('foam')">🫧 Foam</button>
+          <button class="mode-tab" id="tabLeak" onclick="setDetectionMode('leak')">💧 Leakage</button>
+        </div>
+        <label class="demo-toggle">
+          <input type="checkbox" id="demoMode" checked />
+          Demo Mode
+        </label>
+      </div>
     </section>
 
     <section class="upload card">
@@ -388,7 +461,7 @@
       </div>
       <div id="timelineWrap" class="timeline-wrap" title="Click to seek"></div>
       <div class="meta">
-        <div id="timelineHint">Upload and analyze a video to see foam timeline.</div>
+        <div id="timelineHint">Upload and analyze a video to see the detection timeline.</div>
         <div id="currentStatus" class="chip">Status: --</div>
       </div>
     </section>
@@ -421,30 +494,64 @@
 
   <script>
     const el = {
-      dropzone: document.getElementById('dropzone'),
-      fileInput: document.getElementById('fileInput'),
-      pickBtn: document.getElementById('pickBtn'),
-      sampleBtn: document.getElementById('sampleBtn'),
-      analyzeBtn: document.getElementById('analyzeBtn'),
-      uploadInfo: document.getElementById('uploadInfo'),
-      video: document.getElementById('video'),
-      timelineWrap: document.getElementById('timelineWrap'),
-      timelineHint: document.getElementById('timelineHint'),
-      currentStatus: document.getElementById('currentStatus'),
+      dropzone:        document.getElementById('dropzone'),
+      fileInput:       document.getElementById('fileInput'),
+      pickBtn:         document.getElementById('pickBtn'),
+      sampleBtn:       document.getElementById('sampleBtn'),
+      analyzeBtn:      document.getElementById('analyzeBtn'),
+      uploadInfo:      document.getElementById('uploadInfo'),
+      video:           document.getElementById('video'),
+      timelineWrap:    document.getElementById('timelineWrap'),
+      timelineHint:    document.getElementById('timelineHint'),
+      currentStatus:   document.getElementById('currentStatus'),
       resultTableBody: document.getElementById('resultTableBody'),
-      progressBox: document.getElementById('progressBox'),
-      progressText: document.getElementById('progressText'),
-      progressFill: document.getElementById('progressFill'),
-      progressPct: document.getElementById('progressPct'),
-      demoMode: document.getElementById('demoMode'),
+      progressBox:     document.getElementById('progressBox'),
+      progressText:    document.getElementById('progressText'),
+      progressFill:    document.getElementById('progressFill'),
+      progressPct:     document.getElementById('progressPct'),
+      demoMode:        document.getElementById('demoMode'),
+      tabFoam:         document.getElementById('tabFoam'),
+      tabLeak:         document.getElementById('tabLeak'),
+      modeBadge:       document.getElementById('modeBadge'),
+      analyzeBtn:      document.getElementById('analyzeBtn'),
     };
 
-    const statusColors = {
-      NO_FOAM: 'green',
-      FOAM_STARTING: 'yellow',
-      MODERATE_FOAM: 'red',
-      HEAVY_FOAM: 'red',
+    // --- Detection mode state ---
+    let detectionMode = 'foam'; // 'foam' | 'leak'
+
+    const FOAM_COLORS = { NO_FOAM: 'green', FOAM_STARTING: 'yellow', MODERATE_FOAM: 'red', HEAVY_FOAM: 'red' };
+    const LEAK_COLORS = { NO_LEAK: 'green', LEAK_STARTING: 'yellow', MODERATE_LEAK: 'orange', HEAVY_LEAK: 'red' };
+
+    const LIVE_STATUS_COLORS = {
+      NO_FOAM: '#22c55e', FOAM_STARTING: '#eab308', MODERATE_FOAM: '#f97316', HEAVY_FOAM: '#ef4444',
+      NO_LEAK: '#22c55e', LEAK_STARTING: '#eab308', MODERATE_LEAK: '#f97316', HEAVY_LEAK: '#ef4444',
     };
+
+    function getColorMap() {
+      return detectionMode === 'leak' ? LEAK_COLORS : FOAM_COLORS;
+    }
+
+    function setDetectionMode(mode) {
+      detectionMode = mode;
+
+      // Update tabs
+      el.tabFoam.className = 'mode-tab' + (mode === 'foam' ? ' active-foam' : '');
+      el.tabLeak.className = 'mode-tab' + (mode === 'leak' ? ' active-leak' : '');
+
+      // Update badge
+      el.modeBadge.textContent = mode === 'leak' ? 'Leakage' : 'Foam';
+      el.modeBadge.className = `mode-badge ${mode}`;
+
+      // Update analyze button style
+      el.analyzeBtn.className = mode === 'leak' ? 'btn-primary-leak' : 'btn-primary';
+
+      // Update timeline hint
+      if (currentResults.length === 0) {
+        el.timelineHint.textContent = 'Upload and analyze a video to see the detection timeline.';
+      }
+
+      setStatusChip(null);
+    }
 
     let currentVideoId = null;
     let currentResults = [];
@@ -465,7 +572,7 @@
         el.currentStatus.textContent = 'Status: --';
         return;
       }
-      const color = statusColors[row.status] || 'green';
+      const color = getColorMap()[row.status] || 'green';
       el.currentStatus.className = `chip ${color}`;
       el.currentStatus.textContent = `${row.timestamp} | ${row.status} | ${(row.confidence * 100).toFixed(1)}%`;
     }
@@ -475,15 +582,16 @@
         el.resultTableBody.innerHTML = '<tr><td colspan="4" class="empty">No analysis results yet.</td></tr>';
         return;
       }
-
-      el.resultTableBody.innerHTML = results.map((r) => `
-        <tr>
+      const colorMap = getColorMap();
+      el.resultTableBody.innerHTML = results.map((r) => {
+        const color = colorMap[r.status] || 'green';
+        return `<tr>
           <td class="mono">${r.timestamp}</td>
-          <td>${r.status}</td>
+          <td><span class="chip ${color}" style="font-size:0.82rem;">${r.status}</span></td>
           <td>${(Number(r.confidence) * 100).toFixed(1)}%</td>
           <td>${r.description}</td>
-        </tr>
-      `).join('');
+        </tr>`;
+      }).join('');
     }
 
     function renderTimeline(results) {
@@ -492,13 +600,15 @@
 
       if (!currentResults.length) {
         el.timelineWrap.style.display = 'none';
-        el.timelineHint.textContent = 'Upload and analyze a video to see foam timeline.';
+        el.timelineHint.textContent = 'Upload and analyze a video to see the detection timeline.';
         setStatusChip(null);
         return;
       }
 
+      const colorMap = getColorMap();
       const duration = Number(el.video.duration) || (currentResults[currentResults.length - 1].timestamp_seconds + 2);
-      for (let i = 0; i < currentResults.length; i += 1) {
+
+      for (let i = 0; i < currentResults.length; i++) {
         const cur = currentResults[i];
         const next = currentResults[i + 1];
         const start = cur.timestamp_seconds;
@@ -506,9 +616,9 @@
         const widthPct = Math.max(0.8, ((end - start) / duration) * 100);
 
         const seg = document.createElement('span');
-        seg.className = `timeline-segment ${statusColors[cur.status] || 'green'}`;
+        seg.className = `timeline-segment ${colorMap[cur.status] || 'green'}`;
         seg.style.width = `${widthPct}%`;
-        seg.title = `${cur.timestamp} - ${cur.status}`;
+        seg.title = `${cur.timestamp} – ${cur.status}`;
         el.timelineWrap.appendChild(seg);
       }
 
@@ -518,7 +628,12 @@
       el.timelineWrap.appendChild(marker);
 
       el.timelineWrap.style.display = 'block';
-      el.timelineHint.textContent = 'Timeline colors: green=no foam, yellow=starting, red=moderate/heavy. Click to seek.';
+
+      const modeLabel = detectionMode === 'leak'
+        ? 'green=no leak, yellow=starting, orange=moderate, red=heavy'
+        : 'green=no foam, yellow=starting, red=moderate/heavy';
+      el.timelineHint.textContent = `Timeline: ${modeLabel}. Click to seek.`;
+
       updateStatusForTime(el.video.currentTime || 0);
       updateTimelineMarker();
     }
@@ -527,19 +642,15 @@
       if (!currentResults.length) return null;
       let best = currentResults[0];
       let bestDiff = Math.abs(seconds - best.timestamp_seconds);
-      for (let i = 1; i < currentResults.length; i += 1) {
+      for (let i = 1; i < currentResults.length; i++) {
         const d = Math.abs(seconds - currentResults[i].timestamp_seconds);
-        if (d < bestDiff) {
-          best = currentResults[i];
-          bestDiff = d;
-        }
+        if (d < bestDiff) { best = currentResults[i]; bestDiff = d; }
       }
       return best;
     }
 
     function updateStatusForTime(seconds) {
-      const row = nearestResultByTime(seconds);
-      setStatusChip(row);
+      setStatusChip(nearestResultByTime(seconds));
     }
 
     function updateTimelineMarker() {
@@ -552,16 +663,14 @@
     async function uploadVideo(file) {
       const form = new FormData();
       form.append('file', file);
-
       setProgress(true, 'Uploading video...', 5);
       const res = await fetch('/upload', { method: 'POST', body: form });
       if (!res.ok) throw new Error(`Upload failed (${res.status})`);
       const data = await res.json();
-
       currentVideoId = data.video_id;
       el.video.src = data.video_url;
       el.video.load();
-      el.uploadInfo.textContent = `Uploaded: ${data.filename} | Video ID: ${data.video_id}`;
+      el.uploadInfo.textContent = `Uploaded: ${data.filename} | ID: ${data.video_id}`;
       el.analyzeBtn.disabled = false;
       renderTable([]);
       renderTimeline([]);
@@ -570,22 +679,21 @@
 
     async function startAnalysis() {
       if (!currentVideoId) return;
-
-      setProgress(true, 'Starting analysis...', 3);
+      const label = detectionMode === 'leak' ? 'leakage' : 'foam';
+      setProgress(true, `Starting ${label} analysis...`, 3);
       const res = await fetch('/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           video_id: currentVideoId,
           demo_mode: el.demoMode.checked,
+          detection_mode: detectionMode,
         }),
       });
-
       if (!res.ok) {
         const msg = await res.text();
         throw new Error(msg || 'Failed to trigger analysis');
       }
-
       await pollResults();
     }
 
@@ -598,9 +706,13 @@
         if (!res.ok) return;
         const data = await res.json();
 
+        // Sync mode from result if available
+        if (data.detection_mode) detectionMode = data.detection_mode;
+
         const pct = Number(data.progress || 0);
         if (data.status === 'analyzing') {
-          setProgress(true, 'Analyzing frames with vision model...', pct);
+          const label = detectionMode === 'leak' ? 'leakage' : 'foam';
+          setProgress(true, `Analyzing ${label} patterns...`, pct);
         }
 
         if (Array.isArray(data.results)) {
@@ -612,7 +724,9 @@
           setProgress(false);
           clearInterval(pollTimer);
           pollTimer = null;
-          el.uploadInfo.textContent = `Analysis complete for ${currentVideoId}${data.demo_mode ? ' (Demo Mode)' : ''}`;
+          const demo = data.demo_mode ? ' (Demo Mode)' : '';
+          const modeStr = data.detection_mode === 'leak' ? 'Leakage' : 'Foam';
+          el.uploadInfo.textContent = `${modeStr} analysis complete${demo} — ${currentVideoId}`;
         }
 
         if (data.status === 'failed') {
@@ -635,7 +749,6 @@
           el.dropzone.classList.add('active');
         });
       });
-
       ['dragleave', 'drop'].forEach((evt) => {
         el.dropzone.addEventListener(evt, (e) => {
           e.preventDefault();
@@ -643,28 +756,18 @@
           el.dropzone.classList.remove('active');
         });
       });
-
       el.dropzone.addEventListener('drop', async (e) => {
         const [file] = e.dataTransfer.files || [];
         if (!file) return;
-        try {
-          await uploadVideo(file);
-        } catch (err) {
-          setProgress(false);
-          alert(err.message);
-        }
+        try { await uploadVideo(file); } catch (err) { setProgress(false); alert(err.message); }
       });
-
       el.dropzone.addEventListener('click', () => el.fileInput.click());
     }
 
     async function uploadBundledSample() {
       setProgress(true, 'Loading bundled sample...', 2);
       const res = await fetch('/static/sample_foam_video.mp4');
-      if (!res.ok) {
-        throw new Error('Bundled sample is not available. Please upload your own video.');
-      }
-
+      if (!res.ok) throw new Error('Bundled sample not available. Please upload your own video.');
       const blob = await res.blob();
       const file = new File([blob], 'sample_foam_video.mp4', { type: blob.type || 'video/mp4' });
       await uploadVideo(file);
@@ -673,33 +776,16 @@
     el.fileInput.addEventListener('change', async (e) => {
       const [file] = e.target.files || [];
       if (!file) return;
-      try {
-        await uploadVideo(file);
-      } catch (err) {
-        setProgress(false);
-        alert(err.message);
-      }
+      try { await uploadVideo(file); } catch (err) { setProgress(false); alert(err.message); }
       e.target.value = '';
     });
 
     el.pickBtn.addEventListener('click', () => el.fileInput.click());
-
     el.sampleBtn.addEventListener('click', async () => {
-      try {
-        await uploadBundledSample();
-      } catch (err) {
-        setProgress(false);
-        alert(err.message);
-      }
+      try { await uploadBundledSample(); } catch (err) { setProgress(false); alert(err.message); }
     });
-
     el.analyzeBtn.addEventListener('click', async () => {
-      try {
-        await startAnalysis();
-      } catch (err) {
-        setProgress(false);
-        alert(err.message);
-      }
+      try { await startAnalysis(); } catch (err) { setProgress(false); alert(err.message); }
     });
 
     el.video.addEventListener('timeupdate', () => {
@@ -723,16 +809,9 @@
     const liveCanvas = document.createElement('canvas');
     const liveCtx = liveCanvas.getContext('2d');
     const liveOverlay = document.getElementById('liveOverlay');
-    const liveStatus = document.getElementById('liveStatus');
+    const liveStatusEl = document.getElementById('liveStatus');
     const liveConf = document.getElementById('liveConf');
     const liveDesc = document.getElementById('liveDesc');
-
-    const STATUS_COLORS = {
-      'NO_FOAM': '#22c55e',
-      'FOAM_STARTING': '#eab308',
-      'MODERATE_FOAM': '#f97316',
-      'HEAVY_FOAM': '#ef4444',
-    };
 
     async function captureLiveFrame() {
       if (el.video.paused || el.video.ended || !el.video.readyState) return;
@@ -745,13 +824,13 @@
         const res = await fetch('/analyze-frame', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ image: base64 }),
+          body: JSON.stringify({ image: base64, detection_mode: detectionMode }),
         });
         if (!res.ok) return;
         const data = await res.json();
-        const color = STATUS_COLORS[data.status] || '#22c55e';
-        liveStatus.textContent = data.status.replace(/_/g, ' ');
-        liveStatus.style.background = color;
+        const color = LIVE_STATUS_COLORS[data.status] || '#22c55e';
+        liveStatusEl.textContent = data.status.replace(/_/g, ' ');
+        liveStatusEl.style.background = color;
         liveConf.textContent = `Confidence: ${Math.round((data.confidence || 0) * 100)}%`;
         liveDesc.textContent = data.description || '';
       } catch (e) { /* ignore */ }
@@ -772,7 +851,6 @@
     el.video.addEventListener('play', startLive);
     el.video.addEventListener('pause', stopLive);
     el.video.addEventListener('ended', stopLive);
-
   </script>
 </body>
 </html>
